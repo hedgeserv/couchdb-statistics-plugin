@@ -1,20 +1,23 @@
 package org.jenkinsci.plugins.couchstats;
 
 import hudson.Extension;
-import hudson.model.TaskListener;
+import hudson.model.AbstractBuild;
 import hudson.model.Run;
+import hudson.model.TaskListener;
 import hudson.model.listeners.RunListener;
-
-import java.net.MalformedURLException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+import hudson.scm.SCM;
+import hudson.util.CopyOnWriteMap;
 import org.ektorp.CouchDbConnector;
 import org.ektorp.CouchDbInstance;
 import org.ektorp.http.HttpClient;
 import org.ektorp.http.StdHttpClient;
 import org.ektorp.impl.StdCouchDbConnector;
 import org.ektorp.impl.StdCouchDbInstance;
+
+import java.net.MalformedURLException;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Send jenkins result and duration of Jenkins jobs to a couchdb/cloudant server
@@ -39,6 +42,20 @@ public class CouchStatsListener extends RunListener<Run> {
 		long timeInMillis = r.getTimeInMillis();
 		String timeString = r.getTimestampString();
 		String timeStamp = TimeUtils.timeStamp(timeInMillis);
+		int buildId = r.getNumber();
+		String buildUrl = r.getUrl();
+		String buildFullUrl = r.getAbsoluteUrl();
+
+
+
+		AbstractBuild build = (AbstractBuild)r.getParent().getBuildByNumber(buildId);
+		SCM scm = build.getProject().getScm();
+
+		String scmType = scm.getType();
+
+		Map<String, String> scmValues = new CopyOnWriteMap.Hash<String, String>();
+		scm.buildEnvVars(build, scmValues);
+
 
 		LOGGER.log(Level.INFO, "CouchStatsListener: config: " + config);
 		LOGGER.log(Level.INFO, "CouchStatsListener: job: " + jobName + ", result: " + result + ", duration: "
@@ -59,6 +76,12 @@ public class CouchStatsListener extends RunListener<Run> {
 			record.setTimeInMillis(timeInMillis);
 			record.setTimeString(timeString);
 			record.setTimeStamp(timeStamp);
+			record.setBuildId(buildId);
+			record.setBuildURL(buildUrl);
+			record.setScmType(scmType);
+			record.setBuildEnvVars(scmValues);
+			record.setBuildFullUrl(buildFullUrl);
+
 
 			LOGGER.log(Level.FINE, "Saving build record...");
 			StatsRecordRepository repository = new StatsRecordRepository(connector);
@@ -68,4 +91,5 @@ public class CouchStatsListener extends RunListener<Run> {
 			LOGGER.log(Level.SEVERE, "Unable to configure couchdb connector");
 		}
 	}
+
 }
